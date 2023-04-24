@@ -1,25 +1,27 @@
 CC = gcc
-CFLAGS = -Wall -fPIC
+CFLAGS = -Wall -Wextra -Werror
 
-all: libcodecA.so libcodecB.so encode decode
+.PHONY: all clean
 
-libcodecA.so: codecA.o
-	$(CC) -shared -o $@ $^
+all: encode decode
 
-libcodecB.so: codecB.o
-	$(CC) -shared -o $@ $^
+encode: encode.o codecA.o codecB.o
+	$(CC) $(CFLAGS) -o $@ $^
 
-codecA.o: codecA.c codec.h
+decode: decode.o codecA.o codecB.o
+	$(CC) $(CFLAGS) -o $@ $^
+
+encode.o: encode.c codecA.h codecB.h
 	$(CC) $(CFLAGS) -c $<
 
-codecB.o: codecB.c codec.h
+decode.o: decode.c codecA.h codecB.h
 	$(CC) $(CFLAGS) -c $<
 
-encode: encode.c codec.h
-	$(CC) $(CFLAGS) -o $@ $< -ldl
+codecA.o: codecA.c codecA.h
+	$(CC) $(CFLAGS) -c $<
 
-decode: decode.c codec.h
-	$(CC) $(CFLAGS) -o $@ $< -ldl
+codecB.o: codecB.c codecB.h
+	$(CC) $(CFLAGS) -c $<
 
 clean:
-	rm -f *.o *.so encode decode
+	rm -f *.o encode decode

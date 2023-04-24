@@ -1,13 +1,15 @@
 #include "codecB.h"
 
-void encode_codecB(char* message) {
-    for(int i = 0; message[i]; i++) {
-        message[i] = message[i] + 3;
+void codecB_encode(char *str) {
+    while (*str) {
+        *str = (*str + 3) % 256; // Add 3 to ASCII value, wrap around at 256
+        str++;
     }
 }
 
-void decode_codecB(char* message) {
-    for(int i = 0; message[i]; i++) {
-        message[i] = message[i] - 3;
+void codecB_decode(char *str) {
+    while (*str) {
+        *str = (*str - 3 + 256) % 256; // Subtract 3 from ASCII value, wrap around at 256
+        str++;
     }
 }

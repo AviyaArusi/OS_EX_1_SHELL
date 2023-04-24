@@ -1,7 +1,7 @@
-#ifndef CODEC_B_H
-#define CODEC_B_H
+#ifndef CODECB_H
+#define CODECB_H
 
-void encode_codecB(char* message);
-void decode_codecB(char* message);
+void codecB_encode(char *str);
+void codecB_decode(char *str);
 
 #endif

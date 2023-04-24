@@ -1,61 +1,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dlfcn.h>
+#include "codecA.h"
+#include "codecB.h"
 
-// Function pointer type for the encoding and decoding functions
-typedef char* (*CodecFunc)(const char*);
-
-int main(int argc, char* argv[]) {
-    // Check that the correct number of arguments were provided
+int main(int argc, char *argv[]) {
     if (argc != 3) {
-        printf("Usage: encode <codec> <message>\n");
+        printf("Usage: %s <codec> <message>\n", argv[0]);
         return 1;
     }
 
-    // Load the shared library based on the selected codec
-    void* libHandle = dlopen(argv[1], RTLD_LAZY);
-    if (!libHandle) {
-        printf("Error: Failed to load library %s\n", argv[1]);
-        return 1;
-    }
+    char *codec = argv[1];
+    char *message = argv[2];
 
-    // Get pointers to the encoding and decoding functions
-    CodecFunc encodeFunc = (CodecFunc)dlsym(libHandle, "encode");
-    CodecFunc decodeFunc = (CodecFunc)dlsym(libHandle, "decode");
-    char* error = dlerror();
-    if (error) {
-        printf("Error: %s\n", error);
-        dlclose(libHandle);
-        return 1;
-    }
-
-    // Call the appropriate function based on the command line arguments
-    char* input = argv[2];
-    if (strcmp(input, "-h") == 0 || strcmp(input, "--help") == 0) {
-        printf("Usage: encode <codec> <message>\n");
-        printf("Encodes or decodes a message using the specified codec.\n\n");
-        printf("Available codecs:\n");
-        printf(" - codecA\n");
-        printf(" - codecB\n");
-        dlclose(libHandle);
-        return 0;
+    if (strcmp(codec, "codecA") == 0) {
+        codecA_encode(message);
+        printf("%s\n", message);
+    } else if (strcmp(codec, "codecB") == 0) {
+        codecB_encode(message);
+        printf("%s\n", message);
     } else {
-        char* output;
-        if (strcmp(argv[1], "codecA") == 0) {
-            output = encodeFunc(input);
-        } else if (strcmp(argv[1], "codecB") == 0) {
-            output = decodeFunc(input);
-        } else {
-            printf("Error: Invalid codec %s\n", argv[1]);
-            dlclose(libHandle);
-            return 1;
-        }
-        printf("%s\n", output);
-        free(output);
+        printf("Unknown codec: %s\n", codec);
+        return 1;
     }
 
-    // Clean up and exit
-    dlclose(libHandle);
     return 0;
 }

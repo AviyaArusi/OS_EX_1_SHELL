@@ -1,24 +1,17 @@
 #include <ctype.h>
 #include "codecA.h"
 
-void encode_codecA(char* message) {
-    for(int i = 0; message[i]; i++) {
-        if(islower(message[i])) {
-            message[i] = toupper(message[i]);
+void codecA_encode(char *str) {
+    while (*str) {
+        if (islower(*str)) {
+            *str = toupper(*str);
+        } else if (isupper(*str)) {
+            *str = tolower(*str);
         }
-        else if(isupper(message[i])) {
-            message[i] = tolower(message[i]);
-        }
+        str++;
     }
 }
 
-void decode_codecA(char* message) {
-    for(int i = 0; message[i]; i++) {
-        if(islower(message[i])) {
-            message[i] = toupper(message[i]);
-        }
-        else if(isupper(message[i])) {
-            message[i] = tolower(message[i]);
-        }
-    }
+void codecA_decode(char *str) {
+    codecA_encode(str); // Since codecA is reversible, encode and decode are the same
 }
