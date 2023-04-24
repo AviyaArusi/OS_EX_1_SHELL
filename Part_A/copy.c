@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 void usage() {
-    printf("Usage: copy <source> <destination> [-v] [-f]\n");
+    printf("Usage: copy <source> <destination> [-v]\n");
     exit(1);
 }
 
@@ -18,16 +18,25 @@ bool file_exists(char* filename) {
 }
 
 int copy_file(char* source, char* destination, bool verbose, bool force) {
+    if (!file_exists(source))
+    {
+        if (verbose)
+        {
+            perror("general failure");
+            exit(1);
+        }
+    }
     if (!force && file_exists(destination)) {
         if (verbose) {
             printf("target file exists\n");
         }
         return 1;
     }
+
     FILE* src_file = fopen(source, "r");
     if (src_file == NULL) {
         perror("Error opening source file");
-        exit(1);
+        return 1;
     }
     FILE* dest_file = fopen(destination, "w");
     if (dest_file == NULL) {
@@ -43,6 +52,7 @@ int copy_file(char* source, char* destination, bool verbose, bool force) {
     if (verbose) {
         printf("success\n");
     }
+    
     return 0;
 }
 
@@ -56,18 +66,18 @@ int main(int argc, char* argv[]) {
     }
     source = argv[1];
     destination = argv[2];
-    int i;
-    for (i = 3; i < argc; i++) {
+    for (int i = 3; i < argc; i++)
+    {
         if (strcmp(argv[i], "-v") == 0) {
             verbose = true;
-        } else if (strcmp(argv[i], "-f") == 0) {
+        } 
+        if (strcmp(argv[i], "-f") == 0) {
             force = true;
-        } else {
-            usage();
-        }
+        } 
     }
+
     return copy_file(source, destination, verbose, force);
 }
 
 //gcc -o copy copy.c
-//./copy file1 file2 -v -f
+//./copy file1 file2 -v -f 
