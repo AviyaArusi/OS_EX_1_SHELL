@@ -1,155 +1,237 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 #include <signal.h>
 
-#define MAX_CMD_LENGTH 1024
-#define MAX_ARGS 64
-#define MAX_PIPES 16
+// global parameters
+int keep_run = 1;
 
-void handle_signal(int sig) {
-    printf("\n");
-}
+int type = 0;
 
-void execute_command(char *command, int input_fd, int output_fd) {
-    char *args[MAX_ARGS];
-    char *arg;
-    int arg_index = 0;
-    int pipe_fds[2];
-    int i;
+int arrow_flag = 0;
 
-    if (pipe(pipe_fds) == -1) {
+void run_command(char **argv, int *fd_in)
+{
+    /* parse command line */
+    char* line = argv[0];
+    pid_t pid;
+    int fd[2];
+
+    if (strcmp(line, "exit") == 0)
+    {
+        printf("Going home...\n");
+        keep_run = 0;
+        return;
+    }
+
+    if (pipe(fd) == -1) 
+    {
         perror("pipe");
         exit(EXIT_FAILURE);
     }
 
-    while ((arg = strsep(&command, " ")) != NULL) {
-        if (*arg != '\0') {
-            args[arg_index] = arg;
-            arg_index++;
-        }
-    }
-    args[arg_index] = NULL;
-
-    if (strcmp(args[0], "exit") == 0) {
-        exit(EXIT_SUCCESS);
-    }
-
-    pid_t pid = fork();
-
-    if (pid == -1) {
+    pid = fork();
+    if (pid == -1)
+    {
         perror("fork");
         exit(EXIT_FAILURE);
-    } else if (pid == 0) {
-        if (input_fd != STDIN_FILENO) {
-            dup2(input_fd, STDIN_FILENO);
-            close(input_fd);
-        }
-        if (output_fd != STDOUT_FILENO) {
-            dup2(output_fd, STDOUT_FILENO);
-            close(output_fd);
-        }
-        if (output_fd == pipe_fds[1]) {
-            close(pipe_fds[0]);
-        }
-        if (execvp(args[0], args) == -1) {
-            perror("execvp");
-            exit(EXIT_FAILURE);
-        }
-    } else {
-        if (input_fd != STDIN_FILENO) {
-            close(input_fd);
-        }
-        if (output_fd != STDOUT_FILENO) {
-            close(output_fd);
-        }
-        if (output_fd == pipe_fds[1]) {
-            close(pipe_fds[0]);
-        }
-        if (wait(NULL) == -1) {
-            perror("wait");
-            exit(EXIT_FAILURE);
-        }
     }
+    else if (pid == 0)
+    {
+        if (*fd_in != STDIN_FILENO) 
+        {
+            if (dup2(*fd_in, STDIN_FILENO) == -1)
+            {
+                perror("dup2");
+                exit(EXIT_FAILURE);
+            }
+            close(*fd_in);
+        }
 
-    if (command != NULL) {
-        execute_command(command, pipe_fds[0], output_fd);
+        if (fd[1] != STDOUT_FILENO)
+        {
+            if (dup2(fd[1], STDOUT_FILENO) == -1)
+            {
+                perror("dup2");
+                exit(EXIT_FAILURE);
+            }
+            close(fd[1]);
+        }
+
+        if (strcmp(line, "ls") == 0 || strcmp(line, "-l") == 0)
+        {
+            if (execvp("ls", argv) == -1)
+            {
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            }
+        }
+        else
+        {
+            if (execvp(argv[0], argv) == -1)
+            {
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            }
+        }
     }
+    else
+    {
+        close(fd[1]);
+
+        if (*fd_in != STDIN_FILENO)
+        {
+            close(*fd_in);
+        }
+
+        if (strcmp(argv[0], "exit") == 0)
+        {
+            waitpid(pid, NULL, 0);
+            keep_run = 0;
+            return;
+        }
+
+        if (strcmp(argv[0], "|") == 0)
+        {
+            int new_fd_in = fd[0];
+            run_command(&argv[1], &new_fd_in);
+        }
+        else
+        {
+            int status;
+            waitpid(pid, &status, 0);
+
+            if (arrow_flag)
+            {
+                arrow_flag = 0;
+                return;
+            }
+
+            if (status != 0)
+            {
+                printf("shell: %s: command not found\n", line);
+                return;
+            }
+        }
+    }
+}
+
+void ignore_interrupt(int sig)
+{
+    // Do nothing
 }
 
 int main()
 {
-    char cmd[MAX_CMD_LENGTH];
-    char *cmd_ptr;
-    char *cmd_args[MAX_PIPES][MAX_ARGS];
-    int num_pipes = 0;
-    int pipe_fds[MAX_PIPES][2];
-    int i, j;
-    int input_fd = STDIN_FILENO;
-    int output_fd = STDOUT_FILENO;
+    signal(SIGINT, ignore_interrupt);
+    char* line = NULL;
+    size_t line_size = 0;
 
-    signal(SIGINT, handle_signal);
+    while (keep_run)
+    {
+        printf("$ ");
 
-    while (1) {
-        printf("stshell> ");
-        fflush(stdout);
-
-        if (fgets(cmd, MAX_CMD_LENGTH, stdin) == NULL) {
-            if (feof(stdin)) {
-                exit(EXIT_SUCCESS);
-            } else {
-                perror("fgets");
+        if (getline(&line, &line_size, stdin) == -1)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            else
+            {
+                perror("getline");
                 exit(EXIT_FAILURE);
             }
         }
 
-        if (strlen(cmd) > 0 && cmd[strlen(cmd) - 1] == '\n') {
-            cmd[strlen(cmd) - 1] = '\0';
-            };
-    num_pipes = 0;
-    cmd_ptr = cmd;
+        // split arguments
+        char* arg;
+        char** args = malloc(sizeof(char*) * 128);
+        int arg_count = 0;
 
-    // parse commands separated by pipes
-    while ((cmd_args[num_pipes][0] = strtok_r(cmd_ptr, "|", &cmd_ptr))) {
-        num_pipes++;
+        arg = strtok(line, " \n");
+        while (arg != NULL)
+        {
+            if (strcmp(arg, ">") == 0)
+            {
+                type = 1;
+                arg = strtok(NULL, " \n");
+                if (arg == NULL)
+                {
+                    printf("shell: syntax error near unexpected token `newline'\n");
+                    break;
+                }
+                int fd = open(arg, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+                if (fd == -1)
+                {
+                    perror("open");
+                    exit(EXIT_FAILURE);
+                }
+                dup2(fd, STDOUT_FILENO);
+                close(fd);
+                arrow_flag = 1;
+            }
+            else if (strcmp(arg, "<") == 0)
+            {
+                type = 2;
+                arg = strtok(NULL, " \n");
+                if (arg == NULL)
+                {
+                    printf("shell: syntax error near unexpected token `newline'\n");
+                    break;
+                }
+                int fd = open(arg, O_RDONLY);
+                if (fd == -1)
+                {
+                    perror("open");
+                    exit(EXIT_FAILURE);
+                }
+                dup2(fd, STDIN_FILENO);
+                close(fd);
+                arrow_flag = 1;
+            }
+            else if (strcmp(arg, "|") == 0)
+            {
+                type = 3;
+            }
+            else
+            {
+                args[arg_count++] = arg;
+            }
+
+            arg = strtok(NULL, " \n");
+        }
+        args[arg_count] = NULL;
+
+        if (arg_count > 0)
+        {
+            int fd_in = STDIN_FILENO;
+            run_command(args, &fd_in);
+        }
+
+        if (type == 1)
+        {
+            dup2(STDOUT_FILENO, STDOUT_FILENO);
+            type = 0;
+        }
+        else if (type == 2)
+        {
+            dup2(STDIN_FILENO, STDIN_FILENO);
+            type = 0;
+        }
+        else if (type == 3)
+        {
+            type = 0;
+        }
+
+        free(args);
     }
 
-    for (i = 0; i < num_pipes; i++) {
-        // parse individual command arguments
-        char *arg;
-        int arg_index = 0;
-
-        while ((arg = strsep(&cmd_args[i][0], " ")) != NULL) {
-            if (*arg != '\0') {
-                cmd_args[i][arg_index] = arg;
-                arg_index++;
-            }
-        }
-        cmd_args[i][arg_index] = NULL;
-
-        // create pipe
-        if (i < num_pipes - 1) {
-            if (pipe(pipe_fds[i]) == -1) {
-                perror("pipe");
-                exit(EXIT_FAILURE);
-            }
-            output_fd = pipe_fds[i][1];
-        } else {
-            output_fd = STDOUT_FILENO;
-        }
-
-        // execute command
-        execute_command(cmd_args[i][0], input_fd, output_fd);
-
-        if (i < num_pipes - 1) {
-            input_fd = pipe_fds[i][0];
-            close(pipe_fds[i][1]);
-        }
-    }
-}
-
-return 0;
-
+    free(line);
+    return 0;
 }
