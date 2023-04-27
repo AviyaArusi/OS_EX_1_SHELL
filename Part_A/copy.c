@@ -36,7 +36,7 @@ int copy_file(char* source, char* destination, bool verbose, bool force) {
     FILE* src_file = fopen(source, "r");
     if (src_file == NULL) {
         perror("Error opening source file");
-        return 1;
+        exit(1);
     }
     FILE* dest_file = fopen(destination, "w");
     if (dest_file == NULL) {
